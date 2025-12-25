@@ -2,8 +2,7 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const summarizeToKana = async (text: string): Promise<string> => {
-  // Always use new GoogleGenAI({apiKey: process.env.API_KEY}) inside the function or at the top level
-  // ensuring it uses the provided environment variable.
+  // APIキーはprocess.env.API_KEYから取得。最新の値を反映させるため関数内でインスタンス化
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
 
   const systemInstruction = `
@@ -32,7 +31,7 @@ export const summarizeToKana = async (text: string): Promise<string> => {
       },
     });
     
-    // Use .text property directly (it's a getter, not a method)
+    // ガイドラインに従い .text プロパティを参照
     const resultText = response.text;
     return resultText || "うまく まとめられませんでした。もういちど おねがいします。";
   } catch (error) {

@@ -4,7 +4,7 @@ import { AppState } from './types';
 import { summarizeToKana } from './services/geminiService';
 import { MicIcon, StopIcon, LoadingIcon, SparklesIcon, RefreshIcon } from './components/icons';
 
-// Define Speech Recognition types to avoid conflicts with global declarations
+// Web Speech API Types (Local definitions to avoid global conflicts)
 interface SpeechRecognitionResult {
   readonly isFinal: boolean;
   [index: number]: {
@@ -58,10 +58,10 @@ const App: React.FC = () => {
     appStateRef.current = appState;
   }, [appState]);
 
-  // Check for API key at runtime
+  // Vercel上のAPIキー設定を確認
   useEffect(() => {
     if (!process.env.API_KEY) {
-      setError('API_KEYが設定されていません。VercelのEnvironment Variablesを確認してください。');
+      setError('API_KEYが設定されていません。Vercelの [Settings] -> [Environment Variables] に API_KEY を追加してください。');
       setAppState(AppState.ERROR);
     }
   }, []);
@@ -80,7 +80,7 @@ const App: React.FC = () => {
       setAppState(AppState.RESULT);
     } catch (err: any) {
       console.error(err);
-      setError('AIのまとめに しっぱいしました。もういちど おねがいします。');
+      setError('AIのまとめに 失敗しました。もう一度お話しください。');
       setAppState(AppState.ERROR);
     }
   }, []);
@@ -88,7 +88,7 @@ const App: React.FC = () => {
   const startRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setError('お使いのブラウザは音声認識に対応していません。Chromeなどのブラウザを使用してください。');
+      setError('お使いのブラウザは音声認識に対応していません。Chromeをお使いください。');
       setAppState(AppState.ERROR);
       return;
     }
@@ -199,7 +199,7 @@ const App: React.FC = () => {
               <div className="bg-red-50 text-red-600 p-6 rounded-2xl border border-red-100">
                 <p className="font-bold text-lg">{error}</p>
               </div>
-              <button onClick={handleReset} className="text-slate-400 underline hover:text-slate-600">さいしょにもどる</button>
+              <button onClick={handleReset} className="text-slate-400 underline hover:text-slate-600 font-bold">やりなおす</button>
             </div>
           ) : (
             <div className="h-full">
@@ -247,7 +247,6 @@ const App: React.FC = () => {
         
         <footer className="mt-10 text-slate-400 text-sm flex flex-col items-center gap-1">
           <span>Gemini AI (gemini-3-flash-preview)</span>
-          <span className="opacity-50 text-xs text-center px-4">※このアプリは「src/」フォルダを使わずルートディレクトリで動作します。ビルドエラー回避のため冗長なファイルを無視してください。</span>
         </footer>
       </div>
     </div>
