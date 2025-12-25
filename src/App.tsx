@@ -1,3 +1,4 @@
+
 // FIX: Add missing Web Speech API type definitions to resolve TypeScript errors.
 // These are not included in standard DOM typings.
 interface SpeechRecognition extends EventTarget {
@@ -43,8 +44,9 @@ interface SpeechRecognitionErrorEvent extends Event {
 
 declare global {
   interface Window {
-    SpeechRecognition: SpeechRecognitionStatic;
-    webkitSpeechRecognition: SpeechRecognitionStatic;
+    // FIX: Changed type to 'any' to resolve "Subsequent property declarations must have the same type" errors.
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
   }
 }
 

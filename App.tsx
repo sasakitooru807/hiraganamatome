@@ -1,57 +1,27 @@
-// FIX: Add missing Web Speech API type definitions to resolve TypeScript errors.
-// These are not included in standard DOM typings.
+
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { AppState } from './types';
+import { summarizeToKana } from './services/geminiService';
+import { MicIcon, StopIcon, LoadingIcon, SparklesIcon, RefreshIcon } from './components/icons';
+
+// Web Speech API Definitions
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
   onend: (() => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: any) => void) | null;
+  onresult: ((event: any) => void) | null;
   start(): void;
   stop(): void;
 }
 
-interface SpeechRecognitionStatic {
-  new(): SpeechRecognition;
-}
-
-interface SpeechRecognitionEvent extends Event {
-  readonly results: SpeechRecognitionResultList;
-  readonly resultIndex: number;
-}
-
-interface SpeechRecognitionResultList {
-  readonly length: number;
-  item(index: number): SpeechRecognitionResult;
-  [index: number]: SpeechRecognitionResult;
-}
-
-interface SpeechRecognitionResult {
-  readonly isFinal: boolean;
-  readonly length: number;
-  item(index: number): SpeechRecognitionAlternative;
-  [index: number]: SpeechRecognitionAlternative;
-}
-
-interface SpeechRecognitionAlternative {
-  readonly transcript: string;
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  readonly error: string;
-}
-
 declare global {
   interface Window {
-    SpeechRecognition: SpeechRecognitionStatic;
-    webkitSpeechRecognition: SpeechRecognitionStatic;
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
   }
 }
-
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { AppState } from './types';
-import { summarizeToKana } from './services/geminiService';
-import { MicIcon, StopIcon, LoadingIcon, SparklesIcon } from './components/icons';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
@@ -62,14 +32,18 @@ const App: React.FC = () => {
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const appStateRef = useRef(appState);
+
   useEffect(() => {
     appStateRef.current = appState;
   }, [appState]);
-  const transcriptRef = useRef(transcript);
-  useEffect(() => {
-    transcriptRef.current = transcript;
-  }, [transcript]);
 
+  // Check if API Key exists
+  useEffect(() => {
+    if (!process.env.API_KEY) {
+      setError('API_KEY が設定されていません。Vercelの環境変数設定を確認してください。');
+      setAppState(AppState.ERROR);
+    }
+  }, []);
 
   const processTranscript = useCallback(async (text: string) => {
     if (!text.trim()) {
@@ -82,20 +56,14 @@ const App: React.FC = () => {
       const result = await summarizeToKana(text);
       setGeminiResult(result);
       setAppState(AppState.RESULT);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError('AIとの通信中にエラーがおきました。もういちどおためしください。');
+      setError('AIとのつうしんに しっぱいしました。');
       setAppState(AppState.ERROR);
     }
   }, []);
 
   const startRecording = () => {
-    setAppState(AppState.LISTENING);
-    setError('');
-    setTranscript('');
-    setInterimTranscript('');
-    setGeminiResult('');
-
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setError('お使いのブラウザは音声認識に対応していません。');
@@ -103,12 +71,18 @@ const App: React.FC = () => {
       return;
     }
 
-    recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.lang = 'ja-JP';
-    recognitionRef.current.interimResults = true;
-    recognitionRef.current.continuous = true;
+    setAppState(AppState.LISTENING);
+    setError('');
+    setTranscript('');
+    setInterimTranscript('');
+    setGeminiResult('');
 
-    recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current!.lang = 'ja-JP';
+    recognitionRef.current!.interimResults = true;
+    recognitionRef.current!.continuous = true;
+
+    recognitionRef.current!.onresult = (event: any) => {
       let finalPart = '';
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -118,30 +92,25 @@ const App: React.FC = () => {
           interim += event.results[i][0].transcript;
         }
       }
-      if (finalPart) {
-        setTranscript(prev => prev + finalPart);
-      }
+      if (finalPart) setTranscript(prev => prev + finalPart);
       setInterimTranscript(interim);
     };
 
-    recognitionRef.current.onend = () => {
+    recognitionRef.current!.onend = () => {
       if (appStateRef.current === AppState.LISTENING) {
-        processTranscript(transcriptRef.current);
+        // Automatically process if it ended naturally
+        const finalContent = transcript + interimTranscript;
+        processTranscript(finalContent);
       }
     };
 
-    recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
-      let errorMessage = '音声認識中にエラーがおきました。';
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-        errorMessage = 'マイクの使用が許可されていません。ブラウザの設定を確認してください。';
-      } else if (event.error === 'no-speech') {
-        errorMessage = '音声が聞き取れませんでした。もう一度お試しください。';
-      }
-      setError(errorMessage);
+    recognitionRef.current!.onerror = (event: any) => {
+      if (event.error === 'no-speech') return;
+      setError('マイクのエラーです。設定を確認してください。');
       setAppState(AppState.ERROR);
     };
 
-    recognitionRef.current.start();
+    recognitionRef.current!.start();
   };
 
   const stopRecording = () => {
@@ -149,7 +118,7 @@ const App: React.FC = () => {
       recognitionRef.current.stop();
     }
   };
-  
+
   const handleRecordButtonClick = () => {
     if (appState === AppState.LISTENING) {
       stopRecording();
@@ -158,116 +127,107 @@ const App: React.FC = () => {
     }
   };
 
-  const getStatusMessage = () => {
-    switch (appState) {
-      case AppState.IDLE:
-        return 'マイクボタンをおして はなしてください';
-      case AppState.LISTENING:
-        return 'きいています...';
-      case AppState.PROCESSING:
-        return 'AIがまとめています...';
-      case AppState.RESULT:
-        return 'かんせい！';
-      case AppState.ERROR:
-        return 'エラーがはっせいしました';
-      default:
-        return '';
-    }
+  const handleReset = () => {
+    setAppState(AppState.IDLE);
+    setTranscript('');
+    setInterimTranscript('');
+    setGeminiResult('');
+    setError('');
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 font-sans p-4 text-slate-800">
-      <div className="w-full max-w-2xl mx-auto">
-        <header className="text-center mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold text-slate-700">
+    <div className="flex flex-col items-center min-h-screen bg-slate-50 font-sans p-4 text-slate-800">
+      <div className="w-full max-w-2xl flex flex-col items-center pt-10">
+        <header className="text-center mb-10">
+          <h1 className="text-3xl md:text-5xl font-extrabold text-slate-700 tracking-tight">
             ひらがな・カタカナ まとめ
           </h1>
-          <p className="text-slate-500 mt-2 text-lg">
-            はなした ないようを よみやすく せいりします
+          <p className="text-slate-500 mt-3 text-lg">
+            やさしい ことばで おはなしを まとめます
           </p>
         </header>
 
-        <main className="flex flex-col items-center gap-6">
-          <div className="relative">
-            <button
-              onClick={handleRecordButtonClick}
-              disabled={appState === AppState.PROCESSING}
-              className={`relative flex items-center justify-center w-24 h-24 rounded-full transition-all duration-300 ease-in-out shadow-lg focus:outline-none focus:ring-4 focus:ring-opacity-50
-                ${appState === AppState.LISTENING 
-                  ? 'bg-red-500 hover:bg-red-600 text-white focus:ring-red-400' 
-                  : 'bg-blue-500 hover:bg-blue-600 text-white focus:ring-blue-400'}
-                ${appState === AppState.PROCESSING && 'bg-gray-400 cursor-not-allowed'}`}
-            >
-              {appState === AppState.LISTENING ? (
-                <StopIcon className="w-10 h-10" />
-              ) : (
-                <MicIcon className="w-10 h-10" />
-              )}
-            </button>
-            {appState === AppState.LISTENING && (
-                 <div className="absolute top-0 left-0 w-24 h-24 bg-red-500 rounded-full animate-ping opacity-75 -z-10"></div>
-            )}
-          </div>
-          
-          <div className="h-10 flex items-center justify-center">
-            <p className="text-slate-600 text-xl font-medium flex items-center gap-2">
-              {appState === AppState.PROCESSING && <LoadingIcon />}
-              {getStatusMessage()}
-            </p>
-          </div>
+        <div className="mb-8 relative">
+          <button
+            onClick={handleRecordButtonClick}
+            disabled={appState === AppState.PROCESSING}
+            className={`w-24 h-24 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl focus:outline-none focus:ring-4
+              ${appState === AppState.LISTENING 
+                ? 'bg-red-500 hover:bg-red-600 focus:ring-red-300 animate-pulse' 
+                : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-300'}
+              ${appState === AppState.PROCESSING ? 'bg-slate-400 cursor-not-allowed' : ''}`}
+          >
+            {appState === AppState.LISTENING ? <StopIcon className="w-10 h-10 text-white" /> : <MicIcon className="w-10 h-10 text-white" />}
+          </button>
+          {appState === AppState.LISTENING && (
+            <div className="absolute inset-0 w-24 h-24 bg-red-400 rounded-full animate-ping opacity-25"></div>
+          )}
+        </div>
 
-          <div className="w-full bg-white rounded-xl shadow-md p-6 min-h-[200px] transition-opacity duration-500">
-            {error && (
-              <div className="text-red-500 text-center font-medium p-4 bg-red-50 rounded-lg">
-                <p>{error}</p>
+        <div className="w-full bg-white rounded-3xl shadow-xl p-8 min-h-[300px] border border-slate-100 relative overflow-hidden">
+          {appState === AppState.PROCESSING && (
+            <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center z-10 backdrop-blur-sm">
+              <LoadingIcon className="w-12 h-12 mb-4 text-blue-600" />
+              <p className="text-xl font-bold text-slate-600">まとめています...</p>
+            </div>
+          )}
+
+          {error ? (
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+              <div className="bg-red-50 text-red-600 p-6 rounded-2xl border border-red-100">
+                <p className="font-bold text-lg">{error}</p>
+                {error.includes('API_KEY') && (
+                  <p className="text-sm mt-2">Vercelの [Settings] -> [Environment Variables] に API_KEY を追加してください。</p>
+                )}
               </div>
-            )}
-            {!error && appState === AppState.LISTENING && (
-                <>
-                  {(transcript || interimTranscript) ? (
-                    <p className="text-3xl leading-relaxed text-slate-700">
-                      {transcript}
-                      <span className="text-slate-400">{interimTranscript}</span>
-                    </p>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-slate-400">
-                      <p>はなしはじめてください...</p>
-                    </div>
-                  )}
-                </>
-            )}
-            {!error && appState !== AppState.LISTENING && (
-              <>
-                {geminiResult && appState === AppState.RESULT && (
-                  <div className="space-y-4">
-                    <h2 className="text-4xl font-bold text-blue-600 flex items-center gap-2 mb-4">
-                      <SparklesIcon />
+              <button onClick={handleReset} className="text-slate-400 underline hover:text-slate-600">さいしょにもどる</button>
+            </div>
+          ) : (
+            <div className="h-full">
+              {appState === AppState.IDLE && (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 py-20">
+                  <p className="text-xl">ボタンをおして おはなししてください</p>
+                </div>
+              )}
+
+              {appState === AppState.LISTENING && (
+                <div className="space-y-4">
+                  <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">きいています...</p>
+                  <p className="text-3xl leading-relaxed text-slate-700 font-medium">
+                    {transcript}<span className="text-slate-300">{interimTranscript}</span>
+                  </p>
+                </div>
+              )}
+
+              {appState === AppState.RESULT && (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-black text-blue-600 flex items-center gap-2">
+                      <SparklesIcon className="w-6 h-6" />
                       まとめ
                     </h2>
-                    {geminiResult.split('\n').map((line, index) =>
-                      line.trim() ? (
-                        <p key={index} className="text-4xl leading-relaxed text-slate-700">
-                          {line}
-                        </p>
-                      ) : null
-                    )}
+                    <button
+                      onClick={handleReset}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                      title="やりなおす"
+                    >
+                      <RefreshIcon className="w-6 h-6 text-slate-400" />
+                    </button>
                   </div>
-                )}
-                 {transcript && appState === AppState.PROCESSING && (
-                  <div className="mt-6 pt-4 border-t border-slate-200">
-                    <h3 className="text-sm font-bold text-slate-400 mb-2">はなした ないよう：</h3>
-                    <p className="text-slate-500 text-sm">{transcript}</p>
+                  <div className="space-y-6">
+                    {geminiResult.split('\n').map((line, i) => (
+                      line.trim() ? <p key={i} className="text-4xl leading-tight text-slate-800 font-bold">{line}</p> : null
+                    ))}
                   </div>
-                )}
-                {appState === AppState.IDLE && !error && !geminiResult && (
-                  <div className="flex items-center justify-center h-full">
-                    <p className="text-slate-400">ここに けっかが ひょうじされます</p>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </main>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        
+        <footer className="mt-10 text-slate-400 text-sm">
+          Gemini AI をつかって まとめています
+        </footer>
       </div>
     </div>
   );
