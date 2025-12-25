@@ -4,14 +4,35 @@ import { AppState } from './types';
 import { summarizeToKana } from './services/geminiService';
 import { MicIcon, StopIcon, LoadingIcon, SparklesIcon, RefreshIcon } from './components/icons';
 
-// Web Speech API Definitions
+// Define Speech Recognition types to avoid conflicts with global declarations
+interface SpeechRecognitionResult {
+  readonly isFinal: boolean;
+  [index: number]: {
+    readonly transcript: string;
+  };
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionEvent extends Event {
+  readonly results: SpeechRecognitionResultList;
+  readonly resultIndex: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  readonly error: string;
+}
+
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
   onend: (() => void) | null;
-  onerror: ((event: any) => void) | null;
-  onresult: ((event: any) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
   start(): void;
   stop(): void;
 }
@@ -37,28 +58,29 @@ const App: React.FC = () => {
     appStateRef.current = appState;
   }, [appState]);
 
-  // Vercel環境変数のチェック
+  // Check for API key at runtime
   useEffect(() => {
     if (!process.env.API_KEY) {
-      setError('API_KEY が設定されていません。Vercelの [Settings] > [Environment Variables] で API_KEY を追加してください。');
+      setError('API_KEYが設定されていません。VercelのEnvironment Variablesを確認してください。');
       setAppState(AppState.ERROR);
     }
   }, []);
 
   const processTranscript = useCallback(async (text: string) => {
-    if (!text.trim()) {
+    const cleanText = text.trim();
+    if (!cleanText) {
       setAppState(AppState.IDLE);
       return;
     }
     setAppState(AppState.PROCESSING);
     setError('');
     try {
-      const result = await summarizeToKana(text);
+      const result = await summarizeToKana(cleanText);
       setGeminiResult(result);
       setAppState(AppState.RESULT);
     } catch (err: any) {
       console.error(err);
-      setError('AIのまとめに しっぱいしました。通信環境を確認してください。');
+      setError('AIのまとめに しっぱいしました。もういちど おねがいします。');
       setAppState(AppState.ERROR);
     }
   }, []);
@@ -66,7 +88,7 @@ const App: React.FC = () => {
   const startRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setError('お使いのブラウザは音声認識に対応していません。Chromeなどのブラウザをお使いください。');
+      setError('お使いのブラウザは音声認識に対応していません。Chromeなどのブラウザを使用してください。');
       setAppState(AppState.ERROR);
       return;
     }
@@ -82,7 +104,7 @@ const App: React.FC = () => {
     recognitionRef.current!.interimResults = true;
     recognitionRef.current!.continuous = true;
 
-    recognitionRef.current!.onresult = (event: any) => {
+    recognitionRef.current!.onresult = (event: SpeechRecognitionEvent) => {
       let finalPart = '';
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -103,9 +125,9 @@ const App: React.FC = () => {
       }
     };
 
-    recognitionRef.current!.onerror = (event: any) => {
+    recognitionRef.current!.onerror = (event: SpeechRecognitionErrorEvent) => {
       if (event.error === 'no-speech') return;
-      setError('マイクの使用が許可されていないか、エラーが発生しました。');
+      setError(`マイクエラー: ${event.error}`);
       setAppState(AppState.ERROR);
     };
 
@@ -155,6 +177,7 @@ const App: React.FC = () => {
                 ? 'bg-red-500 hover:bg-red-600 focus:ring-red-300 animate-pulse' 
                 : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-300'}
               ${appState === AppState.PROCESSING ? 'bg-slate-400 cursor-not-allowed' : ''}`}
+            aria-label={appState === AppState.LISTENING ? "停止" : "開始"}
           >
             {appState === AppState.LISTENING ? <StopIcon className="w-10 h-10 text-white" /> : <MicIcon className="w-10 h-10 text-white" />}
           </button>
@@ -183,14 +206,14 @@ const App: React.FC = () => {
               {appState === AppState.IDLE && (
                 <div className="flex flex-col items-center justify-center h-full text-slate-400 py-20 text-center">
                   <p className="text-xl">ボタンをおして おはなししてください</p>
-                  <p className="text-sm mt-2">はなしおわったら ボタンをもういちど おしてください</p>
+                  <p className="text-sm mt-2">おわったら もういちど ボタンをおします</p>
                 </div>
               )}
 
               {appState === AppState.LISTENING && (
                 <div className="space-y-4">
                   <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">きいています...</p>
-                  <p className="text-3xl leading-relaxed text-slate-700 font-medium">
+                  <p className="text-3xl leading-relaxed text-slate-700 font-medium break-words">
                     {transcript}<span className="text-slate-300">{interimTranscript}</span>
                   </p>
                 </div>
@@ -213,7 +236,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="space-y-6">
                     {geminiResult.split('\n').map((line, i) => (
-                      line.trim() ? <p key={i} className="text-4xl leading-tight text-slate-800 font-bold">{line}</p> : null
+                      line.trim() ? <p key={i} className="text-4xl leading-tight text-slate-800 font-bold break-words">{line}</p> : null
                     ))}
                   </div>
                 </div>
@@ -222,8 +245,9 @@ const App: React.FC = () => {
           )}
         </div>
         
-        <footer className="mt-10 text-slate-400 text-sm">
-          Gemini AI (gemini-3-flash-preview) をつかっています
+        <footer className="mt-10 text-slate-400 text-sm flex flex-col items-center gap-1">
+          <span>Gemini AI (gemini-3-flash-preview)</span>
+          <span className="opacity-50 text-xs text-center px-4">※このアプリは「src/」フォルダを使わずルートディレクトリで動作します。ビルドエラー回避のため冗長なファイルを無視してください。</span>
         </footer>
       </div>
     </div>
