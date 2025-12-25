@@ -37,10 +37,10 @@ const App: React.FC = () => {
     appStateRef.current = appState;
   }, [appState]);
 
-  // Check if API Key exists
+  // Vercel環境変数のチェック
   useEffect(() => {
     if (!process.env.API_KEY) {
-      setError('API_KEY が設定されていません。Vercelの環境変数設定を確認してください。');
+      setError('API_KEY が設定されていません。Vercelの [Settings] > [Environment Variables] で API_KEY を追加してください。');
       setAppState(AppState.ERROR);
     }
   }, []);
@@ -58,7 +58,7 @@ const App: React.FC = () => {
       setAppState(AppState.RESULT);
     } catch (err: any) {
       console.error(err);
-      setError('AIとのつうしんに しっぱいしました。');
+      setError('AIのまとめに しっぱいしました。通信環境を確認してください。');
       setAppState(AppState.ERROR);
     }
   }, []);
@@ -66,7 +66,7 @@ const App: React.FC = () => {
   const startRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setError('お使いのブラウザは音声認識に対応していません。');
+      setError('お使いのブラウザは音声認識に対応していません。Chromeなどのブラウザをお使いください。');
       setAppState(AppState.ERROR);
       return;
     }
@@ -98,7 +98,6 @@ const App: React.FC = () => {
 
     recognitionRef.current!.onend = () => {
       if (appStateRef.current === AppState.LISTENING) {
-        // Automatically process if it ended naturally
         const finalContent = transcript + interimTranscript;
         processTranscript(finalContent);
       }
@@ -106,7 +105,7 @@ const App: React.FC = () => {
 
     recognitionRef.current!.onerror = (event: any) => {
       if (event.error === 'no-speech') return;
-      setError('マイクのエラーです。設定を確認してください。');
+      setError('マイクの使用が許可されていないか、エラーが発生しました。');
       setAppState(AppState.ERROR);
     };
 
@@ -176,17 +175,15 @@ const App: React.FC = () => {
             <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
               <div className="bg-red-50 text-red-600 p-6 rounded-2xl border border-red-100">
                 <p className="font-bold text-lg">{error}</p>
-                {error.includes('API_KEY') && (
-                  <p className="text-sm mt-2">Vercelの [Settings] -> [Environment Variables] に API_KEY を追加してください。</p>
-                )}
               </div>
               <button onClick={handleReset} className="text-slate-400 underline hover:text-slate-600">さいしょにもどる</button>
             </div>
           ) : (
             <div className="h-full">
               {appState === AppState.IDLE && (
-                <div className="flex flex-col items-center justify-center h-full text-slate-400 py-20">
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 py-20 text-center">
                   <p className="text-xl">ボタンをおして おはなししてください</p>
+                  <p className="text-sm mt-2">はなしおわったら ボタンをもういちど おしてください</p>
                 </div>
               )}
 
@@ -226,7 +223,7 @@ const App: React.FC = () => {
         </div>
         
         <footer className="mt-10 text-slate-400 text-sm">
-          Gemini AI をつかって まとめています
+          Gemini AI (gemini-3-flash-preview) をつかっています
         </footer>
       </div>
     </div>

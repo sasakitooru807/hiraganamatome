@@ -1,17 +1,24 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-// FIX: Initialize Gemini client using named parameter and direct environment variable access as per guidelines.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const summarizeToKana = async (text: string): Promise<string> => {
+  // APIキーはprocess.env.API_KEYから取得。インスタンスは呼び出しの度に作成し最新の状態を維持
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+
   const systemInstruction = `
-    あなたは、こどもやお年寄りにもわかりやすいように、お話をまとめるガイドです。
-    入力された文章を以下のルールでまとめてください：
-    1. ひらがな、カタカナ、数字（0-9）、一部の記号（・、！？）のみを使用すること。漢字は絶対に使わない。
-    2. 箇条書き（・ではじまる）で3つ程度にまとめること。
-    3. 句読点やスペースを適度に入れ、一目で内容がわかるようにすること。
-    4. 各行は短く、力強く書くこと。
+    あなたは「こども」や「ひらがなだけが読める人」のためのまとめ役です。
+    入力された文章を、以下の【絶対ルール】で要約してください：
+
+    【絶対ルール】
+    1. ひらがな、カタカナ、数字、一部の記号（！、？、・）だけを使うこと。漢字は１文字も使ってはいけません。
+    2. 内容を3つくらいの短い文章に分けること。
+    3. 各文章の頭には「・」をつけること。
+    4. 読みやすいように、適度に空白を入れること。
+    
+    例：
+    ・きょうは　いい　てんきです
+    ・おそとで　いっぱい　あそびました
+    ・とても　たのしかったです
   `;
 
   try {
@@ -24,8 +31,8 @@ export const summarizeToKana = async (text: string): Promise<string> => {
       },
     });
     
-    // FIX: Access response.text property directly as per guidelines.
-    return response.text || "うまく まとめられませんでした。";
+    // .text プロパティを直接参照（メソッドではない）
+    return response.text || "うまく まとめられませんでした。もういちど はなしてください。";
   } catch (error) {
     console.error("Gemini API Error:", error);
     throw error;
